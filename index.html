@@ -266,7 +266,9 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
 .group-syn-chip{padding:3px 10px;background:var(--surface3);border-radius:20px;font-size:12px;color:var(--text2)}
 
 /* STATUS / MISC */
-.status-box{padding:.75rem 1rem;border-radius:10px;font-size:13px;margin-bottom:1rem}
+.speak-btn{background:transparent;border:none;cursor:pointer;font-size:16px;padding:2px 4px;opacity:.6;transition:all .12s;vertical-align:middle;line-height:1}
+.speak-btn:hover{opacity:1;transform:scale(1.2)}
+.speak-btn.speaking{opacity:1;animation:pulse-speak .6s ease-in-out infinite}
 .status-ok{background:rgba(61,214,140,.1);border:1px solid rgba(61,214,140,.3);color:var(--green)}
 .status-err{background:rgba(252,92,92,.1);border:1px solid rgba(252,92,92,.3);color:var(--red)}
 .status-info{background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.3);color:var(--accent)}
@@ -456,9 +458,31 @@ body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-
       </div>
 
       <!-- 저장 버튼 -->
-      <div style="display:flex;gap:8px;margin-bottom:1rem;align-items:center">
-        <input id="synSetName" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-family:'Outfit',sans-serif;font-size:13px;color:var(--text);outline:none" placeholder="단어장 이름">
-        <button class="btn btn-green btn-sm" onclick="saveSynSet()">💾 단어장 저장</button>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.1rem;margin-bottom:1rem">
+        <div class="sec-label" style="margin-bottom:10px">저장 방식</div>
+        <input id="synSetName" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-family:'Outfit',sans-serif;font-size:13px;color:var(--text);outline:none;margin-bottom:10px" placeholder="단어장 이름">
+        <div class="save-grid">
+          <div class="save-opt" onclick="saveSynSet()">
+            <div class="save-opt-icon">🃏</div>
+            <div class="save-opt-name">ClassCard 저장</div>
+            <div class="save-opt-desc">바로 학습 가능</div>
+          </div>
+          <div class="save-opt" onclick="synExcel()">
+            <div class="save-opt-icon">📊</div>
+            <div class="save-opt-name">엑셀 다운로드</div>
+            <div class="save-opt-desc">표제어·연상법·동의어</div>
+          </div>
+          <div class="save-opt" onclick="synSaveAll()">
+            <div class="save-opt-icon">💾</div>
+            <div class="save-opt-name">둘 다 저장</div>
+            <div class="save-opt-desc">ClassCard + 엑셀</div>
+          </div>
+          <div class="save-opt" onclick="synCSV()">
+            <div class="save-opt-icon">📋</div>
+            <div class="save-opt-name">CSV 다운로드</div>
+            <div class="save-opt-desc">.csv 파일</div>
+          </div>
+        </div>
       </div>
 
       <div id="synContent"></div>
@@ -997,7 +1021,7 @@ function renderFC(){
     <div class="fc-scene"><div class="fc-wrap" id="fcW" onclick="flipFC()">
       <div class="fc-face fc-front">
         <div class="fc-lbl">영어</div>
-        <div class="fc-word">${esc(w.eng)}</div>
+        <div class="fc-word">${esc(w.eng)} <button class="speak-btn" onclick="event.stopPropagation();speak('${w.eng.replace(/'/g,"\\'")}',this)">🔊</button></div>
         ${w.syn?`<div class="fc-sub">≈ ${esc(w.syn)}</div>`:''}
         <div class="fc-tap">탭하여 뜻 확인</div>
       </div>
@@ -1105,7 +1129,7 @@ function renderQuiz(){
   document.getElementById('studyContent').innerHTML=`
     ${studyHdr(studyWords.length,studyIdx)}
     <div class="quiz-card">
-      <div class="quiz-q">${esc(w.eng)}${w.syn?`<div class="quiz-q-sub">≈ ${esc(w.syn)}</div>`:''}</div>
+      <div class="quiz-q">${esc(w.eng)} <button class="speak-btn" onclick="speak('${w.eng.replace(/'/g,"\\'")}',this)">🔊</button>${w.syn?`<div class="quiz-q-sub">≈ ${esc(w.syn)}</div>`:''}</div>
       <div class="quiz-opts">${opts.map(o=>`<button class="quiz-opt" onclick="chkQuiz(this,'${o.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}','${w.ko.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${esc(o)}</button>`).join('')}</div>
     </div>`;
 }
@@ -1166,7 +1190,21 @@ function renderSchedule(){
   }).join('');
 }
 
-// ── SYN STUDY ──
+// ── SPEAK (발음 듣기) ──
+function speak(word, btnEl){
+  if(!window.speechSynthesis){toast('이 브라우저는 발음 기능을 지원하지 않아요');return;}
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(word);
+  u.lang='en-US'; u.rate=0.85; u.pitch=1;
+  if(btnEl){
+    btnEl.classList.add('speaking');
+    u.onend=()=>btnEl.classList.remove('speaking');
+    u.onerror=()=>btnEl.classList.remove('speaking');
+  }
+  window.speechSynthesis.speak(u);
+}
+
+
 let synImages=[], synGroups=[], synMode='browse', synStudyIdx=0, synStudyScore={c:0,w:0};
 
 function handleSynFiles(files){
@@ -1212,16 +1250,25 @@ async function runSynExtract(){
   const sys=`You are an expert English vocabulary extractor specializing in Korean vocabulary textbooks.
 This textbook organizes words by SYNONYM GROUPS with memory association techniques (연상법).
 
-Extract the complete synonym group structure from the image(s).
+YOUR GOAL: Extract EVERY SINGLE synonym group visible in the image(s). Do not skip any.
+
+Each synonym group looks like this in the textbook:
+- A dark highlighted box with the REPRESENTATIVE WORD (대표 표제어)
+- Synonyms listed next to it (e.g. "plump · corpulent · obese · buxom")
+- Korean translation and syn. label
+- Below: each word with pronunciation, meaning, 연상 mnemonic, example sentence
 
 Return ONLY valid JSON, no markdown:
 {
+  "day": "DAY 숫자 (e.g. DAY 01, DAY 12) — extract from image if visible, else null",
+  "lesson": "LESSON 숫자 if visible, else null",
+  "total_groups_visible": "number of dark header boxes you can see in the image(s)",
   "groups": [
     {
-      "rep": "representative word (headword in dark box)",
+      "rep": "representative word in dark box",
       "rep_ko": "한국어 뜻",
       "rep_pron": "[pronunciation]",
-      "assoc": "연상 mnemonic shown for rep word (연상: text)",
+      "assoc": "연상 mnemonic (현상: ... text)",
       "synonyms": [
         {
           "word": "synonym word",
@@ -1237,19 +1284,22 @@ Return ONLY valid JSON, no markdown:
   ]
 }
 
-Rules:
-- rep: the word in the dark/highlighted header box
-- assoc: the 연상 memory technique shown (e.g. "현상 첩이 : 첩이 살찐다")
-- Extract ALL synonym groups visible
-- Include ALL words in each group including the rep word itself
-- Keep Korean text exactly as shown`;
+CRITICAL RULES:
+- Extract EVERY synonym group on the page - there should be multiple groups per page
+- Each dark header box = one group. Count them all and extract ALL of them
+- total_groups_visible: count the dark boxes before extracting — use this as your target
+- Include ALL words listed under each group as synonyms
+- The rep word itself should also be included in the synonyms array
+- assoc: copy the 연상 mnemonic text EXACTLY as written (현상: ... format)
+- Keep all Korean text exactly as shown
+- A typical page has 3-6 synonym groups - make sure you find them all`;
 
   try{
     const content=synImages.map(img=>({
       type:'image',
       source:{type:'base64',media_type:'image/jpeg',data:img.dataURL.split(',')[1]}
     }));
-    content.push({type:'text',text:`Extract all synonym groups with association mnemonics from these ${synImages.length} textbook page(s).`});
+    content.push({type:'text',text:`Extract ALL synonym groups. First count all dark header boxes, then extract each one. Images: ${synImages.length}`});
 
     const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       model:MODEL,max_tokens:4000,system:sys,
@@ -1262,23 +1312,93 @@ Rules:
       .replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'').trim();
     const s=raw.indexOf('{'),e=raw.lastIndexOf('}');
     if(s===-1||e===-1)throw new Error('JSON을 찾을 수 없어요');
-    synGroups=JSON.parse(raw.slice(s,e+1)).groups||[];
-    synAllWords=[]; // 새 추출 시 초기화
+    const parsed=JSON.parse(raw.slice(s,e+1));
+    synGroups=parsed.groups||[];
+    synAllWords=[];
     if(!synGroups.length)throw new Error('동의어 그룹을 찾지 못했어요');
 
-    // auto name
+    // Day/Lesson 자동 인식
+    const dayStr=parsed.day||'';
+    const lessonStr=parsed.lesson||'';
+    const totalVisible=parseInt(parsed.total_groups_visible)||0;
+    const extracted=synGroups.length;
+    const missing=totalVisible>extracted?totalVisible-extracted:0;
+
+    // 단어장 이름 자동 설정 (Day 포함)
     const nameEl=document.getElementById('synSetName');
-    if(!nameEl.value && synGroups.length)
-      nameEl.value=`동의어 묶음 — ${synGroups.map(g=>g.rep).slice(0,3).join(', ')}${synGroups.length>3?'...':''}`;
+    if(!nameEl.value){
+      let autoName='동의어 묶음';
+      if(dayStr) autoName=`${dayStr} 동의어`;
+      else if(lessonStr) autoName=`Lesson ${lessonStr} 동의어`;
+      nameEl.value=autoName;
+    }
+
+    // 검증 패널 렌더링
+    renderSynVerifyPanel(totalVisible, extracted, missing, dayStr, lessonStr);
 
     document.getElementById('synStudyArea').style.display='block';
     setSynMode('browse',document.querySelector('.syn-mode-btn'));
-    showStatus('synStatus',`✓ ${synGroups.length}개 동의어 묶음 추출 완료`,'ok');
+
+    // 상태 메시지 — 누락 경고 포함
+    if(missing>0){
+      showStatus('synStatus',`⚠️ ${extracted}개 추출됨 (${totalVisible}개 감지 — ${missing}개 누락 가능). 아래 검증 패널을 확인해주세요`,'info');
+    } else {
+      showStatus('synStatus',`✅ ${extracted}개 동의어 묶음 전체 추출 완료${dayStr?' — '+dayStr:''}${lessonStr?' / Lesson '+lessonStr:''}`,'ok');
+    }
   }catch(e){
     showStatus('synStatus','오류: '+e.message,'err');
   }
   document.getElementById('synLoader').style.display='none';
   btn.disabled=false;btn.textContent='✨ 동의어 구조 추출';
+}
+
+
+// ── 검증 패널 ──
+let synDayInfo = {day:'', lesson:''};
+
+function renderSynVerifyPanel(totalVisible, extracted, missing, dayStr, lessonStr){
+  synDayInfo = {day:dayStr, lesson:lessonStr};
+  const nameEl=document.getElementById('synSetName');
+  if(dayStr && nameEl) nameEl.style.borderColor='var(--accent4)';
+
+  let panel=document.getElementById('synVerifyPanel');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.id='synVerifyPanel';
+    const statusEl=document.getElementById('synStatus');
+    statusEl.parentNode.insertBefore(panel, statusEl.nextSibling);
+  }
+  const mc=missing>0?'var(--accent2)':'var(--green)';
+  const mb=missing>0?'rgba(252,92,125,.1)':'rgba(61,214,140,.08)';
+  panel.innerHTML=`
+    <div style="background:${mb};border:1px solid ${mc};border-radius:12px;padding:1rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:600;color:${mc}">${missing>0?`⚠️ 누락 가능 ${missing}개`:'✅ 전체 추출 완료'}</div>
+        <div style="display:flex;gap:8px;font-size:12px">
+          ${dayStr?`<span style="padding:2px 10px;background:rgba(252,200,92,.15);border-radius:20px;color:var(--accent4);font-weight:600">${dayStr}</span>`:''}
+          ${lessonStr?`<span style="padding:2px 10px;background:rgba(124,92,252,.15);border-radius:20px;color:var(--accent);font-weight:600">Lesson ${lessonStr}</span>`:''}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+        <div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:var(--accent4)">${totalVisible||'?'}</div>
+          <div style="font-size:10px;color:var(--text3)">이미지 감지</div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:var(--green)">${extracted}</div>
+          <div style="font-size:10px;color:var(--text3)">추출 완료</div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:${missing>0?'var(--accent2)':'var(--text3)'}">${missing}</div>
+          <div style="font-size:10px;color:var(--text3)">누락 의심</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px"><strong>추출된 표제어:</strong></div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
+        ${synGroups.map((g,i)=>`<span style="padding:3px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-size:11px;cursor:pointer" onclick="document.querySelectorAll('.syn-group-card')[${i}]?.scrollIntoView({behavior:'smooth'})">${i+1}. ${esc(g.rep)}</span>`).join('')}
+      </div>
+      ${missing>0?`<div style="font-size:12px;color:var(--accent2);background:rgba(252,92,125,.08);border-radius:8px;padding:8px">💡 누락이 있다면 사진을 다시 올리거나 + 추가 버튼으로 직접 입력해주세요</div>`:''}
+    </div>`;
 }
 
 function setSynMode(mode, btn){
@@ -1303,7 +1423,9 @@ function renderSynBrowse(){
     <div class="syn-group-card">
       <div class="syn-group-head">
         <div>
-          <div class="syn-rep-word">${esc(g.rep)}<span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px">${esc(g.rep_pron||'')}</span></div>
+          <div class="syn-rep-word">${esc(g.rep)}<span style="font-size:13px;font-weight:400;color:var(--text3);margin-left:6px">${esc(g.rep_pron||'')}</span>
+            <button class="speak-btn" onclick="speak('${g.rep.replace(/'/g,"\\'")}',this)" title="발음 듣기">🔊</button>
+          </div>
           <div class="syn-rep-ko">${esc(g.rep_ko||'')}</div>
         </div>
         <span style="font-size:11px;color:var(--text3)">${(g.synonyms||[]).length}개 동의어</span>
@@ -1318,7 +1440,9 @@ function renderSynBrowse(){
       <div id="detail_${gi}" style="display:none">
         ${(g.synonyms||[]).map((s,si)=>`
           <div class="syn-detail" id="syndet_${gi}_${si}">
-            <div class="syn-detail-word">${esc(s.word)} <span style="font-size:12px;font-weight:400;color:var(--text3)">${esc(s.pron||'')} <span style="color:var(--accent2)">${esc(s.pos||'')}</span></span></div>
+            <div class="syn-detail-word">${esc(s.word)}
+              <button class="speak-btn" onclick="speak('${s.word.replace(/'/g,"\\'")}',this)" title="발음 듣기">🔊</button>
+              <span style="font-size:12px;font-weight:400;color:var(--text3)">${esc(s.pron||'')} <span style="color:var(--accent2)">${esc(s.pos||'')}</span></span></div>
             <div class="syn-detail-ko">${esc(s.ko||'')}</div>
             ${s.assoc?`<div class="syn-detail-assoc">💡 연상: ${esc(s.assoc)}</div>`:''}
             ${s.example?`<div class="syn-detail-ex">"${esc(s.example)}"${s.example_ko?`<div style="margin-top:3px;color:var(--text3)">${esc(s.example_ko)}</div>`:''}</div>`:''}
@@ -1376,11 +1500,10 @@ function renderSynFlash(){
     <div class="fc-scene"><div class="fc-wrap" id="fcW" onclick="flipSynFC()">
       <div class="fc-face fc-front">
         <div class="fc-lbl">영어 단어</div>
-        <div class="fc-word">${esc(w.word)}</div>
+        <div class="fc-word">${esc(w.word)} <button class="speak-btn" onclick="event.stopPropagation();speak('${w.word.replace(/'/g,"\\'")}',this)" title="발음 듣기">🔊</button></div>
         <div class="fc-sub">${esc(w.pron||'')}</div>
         ${w.assoc?`<div style="margin-top:10px;padding:6px 12px;background:rgba(252,200,92,.1);border-radius:8px;font-size:12px;color:var(--accent4)">💡 ${esc(w.assoc)}</div>`:''}
         <div class="fc-tap">탭하여 뜻 확인</div>
-      </div>
       <div class="fc-face fc-back">
         <div class="fc-lbl">한국어 뜻</div>
         <div class="fc-ko">${esc(w.ko||'')}</div>
@@ -1417,7 +1540,7 @@ function renderSynGroupQuiz(){
     <div class="quiz-card">
       <div style="text-align:center;margin-bottom:6px">
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px">이 단어가 속한 동의어 그룹은?</div>
-        <div class="quiz-q">${esc(w.word)}</div>
+        <div class="quiz-q">${esc(w.word)} <button class="speak-btn" onclick="speak('${w.word.replace(/'/g,"\\'")}',this)">🔊</button></div>
         ${w.ko?`<div style="font-size:14px;color:var(--text2);margin-top:4px;font-family:'Noto Sans KR',sans-serif">${esc(w.ko)}</div>`:''}
         ${w.assoc?`<div style="font-size:12px;color:var(--accent4);margin-top:6px">💡 ${esc(w.assoc)}</div>`:''}
       </div>
@@ -1497,7 +1620,6 @@ function renderSynResult(){
 function saveSynSet(){
   if(!synGroups.length){toast('추출된 내용이 없어요');return;}
   const name=document.getElementById('synSetName').value.trim()||'동의어 묶음 단어장';
-  // Flatten: 각 단어에 그룹 정보 + 연상법을 syn 필드로
   const words=[];
   synGroups.forEach(g=>{
     (g.synonyms||[]).forEach(s=>{
@@ -1515,7 +1637,66 @@ function saveSynSet(){
   setTimeout(()=>goPage('sets'),800);
 }
 
-// goPage에 synstudy 추가
+function synExcel(){
+  if(!synGroups.length){toast('추출된 내용이 없어요');return;}
+  try{
+    const wb=XLSX.utils.book_new();
+    const dayTag=synDayInfo.day||synDayInfo.lesson||'';
+
+    // 시트1: 단어 목록
+    const rows1=[['표제어','발음','품사','한국어 뜻','연상법','동의어 목록','예문','예문 해석']];
+    synGroups.forEach(g=>{
+      (g.synonyms||[]).forEach(s=>{
+        const synList=[g.rep,...(g.synonyms||[]).filter(x=>x.word!==s.word).map(x=>x.word)].join(', ');
+        rows1.push([s.word,s.pron||'',s.pos||'',s.ko||'',s.assoc||g.assoc||'',synList,s.example||'',s.example_ko||'']);
+      });
+      rows1.push(['','','','','','','','']); // 그룹 구분 빈 줄
+    });
+    const ws1=XLSX.utils.aoa_to_sheet(rows1);
+    ws1['!cols']=[{wch:18},{wch:14},{wch:6},{wch:18},{wch:28},{wch:35},{wch:40},{wch:35}];
+    XLSX.utils.book_append_sheet(wb,ws1,'단어 목록');
+
+    // 시트2: 그룹 요약
+    const rows2=[['동의어 그룹','발음','한국어 뜻','연상법','동의어 전체 목록']];
+    synGroups.forEach(g=>{
+      rows2.push([g.rep,g.rep_pron||'',g.rep_ko||'',g.assoc||'',(g.synonyms||[]).map(s=>s.word).join(' · ')]);
+    });
+    const ws2=XLSX.utils.aoa_to_sheet(rows2);
+    ws2['!cols']=[{wch:18},{wch:14},{wch:18},{wch:30},{wch:50}];
+    XLSX.utils.book_append_sheet(wb,ws2,'그룹 요약');
+
+    const name=document.getElementById('synSetName').value.trim()||'동의어묶음';
+    const dateStr=new Date().toISOString().slice(0,10);
+    const fname=dayTag?`${dayTag}_단어장_${dateStr}.xlsx`:`${name}_${dateStr}.xlsx`;
+    XLSX.writeFile(wb,fname);
+    toast('엑셀 저장 완료! ✓');
+  }catch(e){toast('엑셀 오류: '+e.message);}
+}
+
+// 동의어 그룹 CSV 저장
+function synCSV(){
+  if(!synGroups.length){toast('추출된 내용이 없어요');return;}
+  const rows=[['표제어','발음','품사','한국어 뜻','연상법','동의어 목록','예문','예문 해석']];
+  synGroups.forEach(g=>{
+    (g.synonyms||[]).forEach(s=>{
+      const synList=[g.rep,...(g.synonyms||[]).filter(x=>x.word!==s.word).map(x=>x.word)].join(', ');
+      rows.push([s.word,s.pron||'',s.pos||'',s.ko||'',s.assoc||g.assoc||'',synList,s.example||'',s.example_ko||'']);
+    });
+  });
+  const csv='\uFEFF'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const name=document.getElementById('synSetName').value.trim()||'동의어묶음';
+  a.download=`${name}_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('CSV 저장 완료! ✓');
+}
+
+function synSaveAll(){saveSynSet();setTimeout(synExcel,500);}
+
+
 
 renderSets();
 createRows=[{e:'',k:'',s:''}];
